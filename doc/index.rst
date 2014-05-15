@@ -1,4 +1,4 @@
 Magento Stock Module
 ####################
 
-The magento_stock module to export stock for Magento
+The magento stock module to export stock for Magento
