@@ -1,11 +1,13 @@
 #This file is part magento_stock module for Tryton.
 #The COPYRIGHT file at the top level of this repository contains
 #the full copyright notices and license terms.
-from trytond.transaction import Transaction
 from trytond.pool import Pool, PoolMeta
+from trytond.transaction import Transaction
 
+import datetime
 import logging
 import threading
+
 from magento import *
 
 __all__ = ['SaleShop']
@@ -15,63 +17,95 @@ __metaclass__ = PoolMeta
 class SaleShop:
     __name__ = 'sale.shop'
 
-    def export_stock_magento(self, shop, products):
-        """Export Stock to Magento APP
-        :param shop: Obj
-        :param products: Obj list
+    def export_stocks_magento(self, shop, tpls=[]):
+        """Export Stocks to Magento
+        :param shop: object
+        :param tpls: list
         """
-        prods = [product.id for product in products
-                if product.code and product.template.esale_active ]
+        pool = Pool()
+        Template = pool.get('product.template')
 
-        logging.getLogger('magento stock').info(
-            '%s. Export stock %s product(s).' % (
-            shop.name, len(prods)
-            ))
+        if tpls:
+            templates = []
+            for t in Template.browse(tpls):
+                shops = [s.id for s in t.esale_saleshops]
+                if t.esale_available and shop.id in shops:
+                    templates.append(t)
+        else:
+            now = datetime.datetime.now()
+            last_stocks = shop.esale_last_stocks
 
-        db_name = Transaction().cursor.dbname
-        thread1 = threading.Thread(target=self.export_stock_magento_thread, 
-            args=(db_name, Transaction().user, shop.id, prods,))
-        thread1.start()
+            products = self.get_product_from_move_and_date(shop, last_stocks)
+            tpls = [product.template for product in products]
+            templates = list(set(tpls))
 
-    def export_stock_magento_thread(self, db_name, user, shop, products):
-        """Export Stock to Magento APP - Thread
+            # Update date last import
+            self.write([shop], {'esale_last_stocks': now})
+
+        if not templates:
+            logging.getLogger('magento').info(
+                'Magento %s. Not products to export stock.' % (shop.name))
+        else:
+            logging.getLogger('magento').info(
+                'Magento %s. Start export stock %s products.' % (
+                    shop.name, len(templates)))
+
+            user = self.get_shop_user(shop)
+
+            db_name = Transaction().cursor.dbname
+            thread1 = threading.Thread(target=self.export_stock_magento_thread, 
+                args=(db_name, user.id, shop.id, templates,))
+            thread1.start()
+
+    def export_stock_magento_thread(self, db_name, user, sale_shop, templates):
+        """Export product stock to Magento APP
         :param db_name: str
         :param user: int
-        :param shop: Obj
-        :param products: list
+        :param sale_shop: int
+        :param templates: list
         """
-        with Transaction().start(db_name, user) as transaction:
+
+        with Transaction().start(db_name, user):
             pool = Pool()
             SaleShop = pool.get('sale.shop')
-            Product = pool.get('product.product')
+            Template = pool.get('product.template')
 
-            sale_shop = SaleShop.browse([shop])[0]
-            mgnapp = sale_shop.magento_website.magento_app
+            shop, = SaleShop.browse([sale_shop])
+            app = shop.magento_website.magento_app
 
-            prods = Product.search([('id', 'in', products)])
-            quantities = self.get_esale_product_quantity(prods)
+            with Inventory(app.uri, app.username, app.password) as inventory_api:
+                for template in Template.browse(templates):
+                    products = [product for product in template.products if product.code]
+                    quantities = self.get_esale_product_quantity(products)
+                    
+                    for product in products:
+                        code = product.code
 
-            with Inventory(mgnapp.uri, mgnapp.username, mgnapp.password) as inventory_api:
-                for product in Product.browse(products):
-                    qty = quantities[product.id]
-                    is_in_stock = int(qty > 0) or False
-                    manage_stock = product.esale_manage_stock
-                    data = { 
-                        'qty': qty,
-                        'is_in_stock': is_in_stock,
-                        'manage_stock': manage_stock
-                    }
-                    try:
-                        inventory_api.update(product.code, data)
-                        logging.getLogger('esale stock').info(
-                            '%s. Export stock %s - %s' % (
-                            sale_shop.name, product.code, data
-                            ))
-                    except:
-                        logging.getLogger('esale stock').error(
-                            '%s. Export stock %s - %s' % (
-                            sale_shop.name, product.code, data
-                            ))
+                        qty = quantities[product.id]
+                        is_in_stock = int(qty > 0) or False
+                        manage_stock = product.esale_manage_stock
+                        data = { 
+                            'qty': qty,
+                            'is_in_stock': is_in_stock,
+                            'manage_stock': manage_stock
+                        }
+                        if app.debug:
+                            message = 'Magento %s. Product: %s. Data: %s' % (
+                                    shop.name, code, data)
+                            logging.getLogger('magento').info(message)
+                        try:
+                            inventory_api.update(product.code, data)
+                            message = '%s. Export stock %s - %s' % (
+                                shop.name, code, data.get('qty')
+                                )
+                            logging.getLogger('esale stock').info(message)
+                        except:
+                            message = '%s. Error export stock %s - %s' % (
+                                shop.name, code, data
+                                )
+                            logging.getLogger('esale stock').error(message)
 
-            logging.getLogger('esale stock').info(
-                    '%s. End export stock' % (sale_shop.name))
+            Transaction().cursor.commit()
+            logging.getLogger('magento').info(
+                'Magento %s. End export stocks %s products.' % (
+                    shop.name, len(templates)))
