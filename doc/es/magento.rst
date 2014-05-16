@@ -1,4 +1,4 @@
-#:before:magento/magento:section:exportacion_de_precios_de_productos#
+#:before:magento/magento:section:pedidos#
 
 .. inheritref:: magento/magento:section:exportacion_de_stock_de_productos
 
