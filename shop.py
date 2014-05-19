@@ -89,6 +89,22 @@ class SaleShop:
                             'is_in_stock': is_in_stock,
                             'manage_stock': manage_stock
                         }
+
+                        if hasattr(template, 'sale_min_qty'):
+                            if template.sale_min_qty:
+                                data['min_sale_qty'] = template.sale_min_qty
+                                data['use_config_min_sale_qty'] = '0'
+                            else:
+                                data['min_sale_qty'] = 1
+                                data['use_config_min_sale_qty'] = '1'
+                        if hasattr(template, 'max_sale_qty'):
+                            if template.max_sale_qty:
+                                data['max_sale_qty'] = template.max_sale_qty
+                                data['use_config_min_sale_qty'] = '0'
+                            else:
+                                data['max_sale_qty'] = 1
+                                data['use_config_min_sale_qty'] = '1'
+
                         if app.debug:
                             message = 'Magento %s. Product: %s. Data: %s' % (
                                     shop.name, code, data)
