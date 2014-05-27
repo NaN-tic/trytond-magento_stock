@@ -80,10 +80,16 @@ class SaleShop:
                     
                     for product in products:
                         code = product.code
-
                         qty = quantities[product.id]
-                        is_in_stock = int(qty > 0) or False
-                        manage_stock = product.esale_manage_stock
+
+                        is_in_stock = '0'
+                        if qty > 0:
+                            is_in_stock = '1'
+
+                        manage_stock = '0'
+                        if product.esale_manage_stock:
+                            manage_stock = '1'
+
                         data = { 
                             'qty': qty,
                             'is_in_stock': is_in_stock,
