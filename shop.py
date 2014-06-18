@@ -17,7 +17,7 @@ __metaclass__ = PoolMeta
 class SaleShop:
     __name__ = 'sale.shop'
 
-    def export_stocks_magento(self, shop, tpls=[]):
+    def export_stocks_magento(self, tpls=[]):
         """Export Stocks to Magento
         :param shop: object
         :param tpls: list
@@ -29,32 +29,32 @@ class SaleShop:
             templates = []
             for t in Template.browse(tpls):
                 shops = [s.id for s in t.esale_saleshops]
-                if t.esale_available and shop.id in shops:
+                if t.esale_available and self.id in shops:
                     templates.append(t)
         else:
             now = datetime.datetime.now()
-            last_stocks = shop.esale_last_stocks
+            last_stocks = self.esale_last_stocks
 
-            products = self.get_product_from_move_and_date(shop, last_stocks)
+            products = self.get_product_from_move_and_date(self, last_stocks)
             tpls = [product.template for product in products]
             templates = list(set(tpls))
 
             # Update date last import
-            self.write([shop], {'esale_last_stocks': now})
+            self.write([self], {'esale_last_stocks': now})
 
         if not templates:
             logging.getLogger('magento').info(
-                'Magento %s. Not products to export stock.' % (shop.name))
+                'Magento %s. Not products to export stock.' % (self.name))
         else:
             logging.getLogger('magento').info(
                 'Magento %s. Start export stock %s products.' % (
-                    shop.name, len(templates)))
+                    self.name, len(templates)))
 
-            user = self.get_shop_user(shop)
+            user = self.get_shop_user(self)
 
             db_name = Transaction().cursor.dbname
             thread1 = threading.Thread(target=self.export_stock_magento_thread, 
-                args=(db_name, user.id, shop.id, templates,))
+                args=(db_name, user.id, self.id, templates,))
             thread1.start()
 
     def export_stock_magento_thread(self, db_name, user, sale_shop, templates):
