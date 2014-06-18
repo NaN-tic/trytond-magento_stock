@@ -35,7 +35,7 @@ class SaleShop:
             now = datetime.datetime.now()
             last_stocks = self.esale_last_stocks
 
-            products = self.get_product_from_move_and_date(self, last_stocks)
+            products = self.get_product_from_move_and_date(last_stocks)
             tpls = [product.template for product in products]
             templates = list(set(tpls))
 
