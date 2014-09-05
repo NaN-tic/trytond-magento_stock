@@ -44,11 +44,10 @@ class SaleShop:
 
         if not templates:
             logging.getLogger('magento').info(
-                'Magento %s. Not products to export stock.' % (self.name))
+                'Magento. Not products to export stock.')
         else:
             logging.getLogger('magento').info(
-                'Magento %s. Start export stock %s products.' % (
-                    self.name, len(templates)))
+                'Magento. Start export stock %s products.' % (len(templates)))
 
             user = self.get_shop_user(self)
 
