@@ -49,7 +49,7 @@ class SaleShop:
             logging.getLogger('magento').info(
                 'Magento. Start export stock %s products.' % (len(templates)))
 
-            user = self.get_shop_user(self)
+            user = self.get_shop_user()
 
             db_name = Transaction().cursor.dbname
             thread1 = threading.Thread(target=self.export_stock_magento_thread, 
