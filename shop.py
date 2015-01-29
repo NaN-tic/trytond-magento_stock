@@ -75,8 +75,10 @@ class SaleShop:
             with Inventory(app.uri, app.username, app.password) as inventory_api:
                 for template in Template.browse(templates):
                     products = [product for product in template.products if product.code]
-                    quantities = self.get_esale_product_quantity(products)
-                    
+                    quantities = shop.get_esale_product_quantity(products)
+                    if not quantities:
+                        continue
+
                     for product in products:
                         code = product.code
                         qty = quantities[product.id]
