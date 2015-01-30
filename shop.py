@@ -53,10 +53,10 @@ class SaleShop:
 
             db_name = Transaction().cursor.dbname
             thread1 = threading.Thread(target=self.export_stock_magento_thread, 
-                args=(db_name, user.id, self.id, templates,))
+                args=(db_name, user.id, self.id, templates, Transaction().context))
             thread1.start()
 
-    def export_stock_magento_thread(self, db_name, user, sale_shop, templates):
+    def export_stock_magento_thread(self, db_name, user, sale_shop, templates, context={}):
         """Export product stock to Magento APP
         :param db_name: str
         :param user: int
@@ -64,7 +64,7 @@ class SaleShop:
         :param templates: list
         """
 
-        with Transaction().start(db_name, user):
+        with Transaction().start(db_name, user, context=context):
             pool = Pool()
             SaleShop = pool.get('sale.shop')
             Template = pool.get('product.template')
