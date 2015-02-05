@@ -24,6 +24,7 @@ class SaleShop:
         """
         pool = Pool()
         Template = pool.get('product.template')
+        User = pool.get('res.user')
 
         if tpls:
             templates = []
@@ -50,10 +51,13 @@ class SaleShop:
                 'Magento. Start export stock %s products.' % (len(templates)))
 
             user = self.get_shop_user()
+            context = Transaction().context
+            if not context.get('shop'): # reload context when run cron user
+                context = User._get_preferences(user, context_only=True)
 
             db_name = Transaction().cursor.dbname
             thread1 = threading.Thread(target=self.export_stock_magento_thread, 
-                args=(db_name, user.id, self.id, templates, Transaction().context))
+                args=(db_name, user.id, self.id, templates, context))
             thread1.start()
 
     def export_stock_magento_thread(self, db_name, user, sale_shop, templates, context={}):
