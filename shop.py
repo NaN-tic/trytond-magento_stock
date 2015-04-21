@@ -29,7 +29,7 @@ class SaleShop:
         if tpls:
             templates = []
             for t in Template.browse(tpls):
-                shops = [s.id for s in t.esale_saleshops]
+                shops = [s.id for s in t.shops]
                 if t.esale_available and self.id in shops:
                     templates.append(t)
         else:
