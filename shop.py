@@ -3,10 +3,8 @@
 # the full copyright notices and license terms.
 from trytond.pool import Pool, PoolMeta
 from trytond.transaction import Transaction
-
 import datetime
 import logging
-import threading
 
 from magento import *
 
@@ -17,14 +15,77 @@ __metaclass__ = PoolMeta
 class SaleShop:
     __name__ = 'sale.shop'
 
+    def sync_stock_magento(self, products):
+        '''Sync Stock Magento'''
+        pool = Pool()
+        User = pool.get('res.user')
+
+        app = self.magento_website.magento_app
+
+        context = Transaction().context
+        if not context.get('shop'): # reload context when run cron user
+            user = self.get_shop_user()
+            context = User._get_preferences(user, context_only=True)
+        context['shop'] = self.id # force current shop
+
+        with Transaction().set_context(context):
+            quantities = self.get_esale_product_quantity(products)
+
+        with Inventory(app.uri, app.username, app.password) as inventory_api:
+            for product in products:
+                code = product.code
+                qty = quantities[product.id]
+
+                is_in_stock = '0'
+                if qty > 0:
+                    is_in_stock = '1'
+
+                manage_stock = '0'
+                if product.esale_manage_stock:
+                    manage_stock = '1'
+
+                data = { 
+                    'qty': qty,
+                    'is_in_stock': is_in_stock,
+                    'manage_stock': manage_stock
+                    }
+                if hasattr(product, 'sale_min_qty'):
+                    if product.sale_min_qty:
+                        data['min_sale_qty'] = product.sale_min_qty
+                        data['use_config_min_sale_qty'] = '0'
+                    else:
+                        data['min_sale_qty'] = 1
+                        data['use_config_min_sale_qty'] = '1'
+                if hasattr(product, 'max_sale_qty'):
+                    if product.max_sale_qty:
+                        data['max_sale_qty'] = product.max_sale_qty
+                        data['use_config_min_sale_qty'] = '0'
+                    else:
+                        data['max_sale_qty'] = 1
+                        data['use_config_min_sale_qty'] = '1'
+
+                if app.debug:
+                    message = 'Magento %s. Product: %s. Data: %s' % (
+                            self.name, code, data)
+                    logging.getLogger('magento').info(message)
+                try:
+                    inventory_api.update(product.code, data)
+                    message = '%s. Export stock %s - %s' % (
+                        self.name, code, data.get('qty')
+                        )
+                    logging.getLogger('magento').info(message)
+                except:
+                    message = '%s. Error export stock %s - %s' % (
+                        self.name, code, data
+                        )
+                    logging.getLogger('magento').error(message)
+
     def export_stocks_magento(self, tpls=[]):
         """Export Stocks to Magento
-        :param shop: object
-        :param tpls: list
+        :param tpls: list of product.template ids
         """
         pool = Pool()
         Template = pool.get('product.template')
-        User = pool.get('res.user')
 
         if tpls:
             templates = []
@@ -46,93 +107,17 @@ class SaleShop:
         if not templates:
             logging.getLogger('magento').info(
                 'Magento. Not products to export stock.')
-        else:
-            logging.getLogger('magento').info(
-                'Magento. Start export stock %s products.' % (len(templates)))
+            return
 
-            user = self.get_shop_user()
-            context = Transaction().context
-            if not context.get('shop'): # reload context when run cron user
-                context = User._get_preferences(user, context_only=True)
+        products = [product for template in templates for product in template.products]
 
-            db_name = Transaction().cursor.dbname
-            thread1 = threading.Thread(target=self.export_stock_magento_thread, 
-                args=(db_name, user.id, self.id, templates, context))
-            thread1.start()
+        logging.getLogger('magento').info(
+            'Magento %s. Start export stock %s products.' % (
+                self.name, len(products)))
 
-    def export_stock_magento_thread(self, db_name, user, sale_shop, templates, context={}):
-        """Export product stock to Magento APP
-        :param db_name: str
-        :param user: int
-        :param sale_shop: int
-        :param templates: list
-        """
+        self.sync_stock_magento(products)
+        Transaction().cursor.commit()
 
-        with Transaction().start(db_name, user, context=context):
-            pool = Pool()
-            SaleShop = pool.get('sale.shop')
-            Template = pool.get('product.template')
-
-            shop, = SaleShop.browse([sale_shop])
-            app = shop.magento_website.magento_app
-
-            with Inventory(app.uri, app.username, app.password) as inventory_api:
-                for template in Template.browse(templates):
-                    products = [product for product in template.products if product.code]
-                    quantities = shop.get_esale_product_quantity(products)
-                    if not quantities:
-                        continue
-
-                    for product in products:
-                        code = product.code
-                        qty = quantities[product.id]
-
-                        is_in_stock = '0'
-                        if qty > 0:
-                            is_in_stock = '1'
-
-                        manage_stock = '0'
-                        if product.esale_manage_stock:
-                            manage_stock = '1'
-
-                        data = { 
-                            'qty': qty,
-                            'is_in_stock': is_in_stock,
-                            'manage_stock': manage_stock
-                        }
-
-                        if hasattr(template, 'sale_min_qty'):
-                            if template.sale_min_qty:
-                                data['min_sale_qty'] = template.sale_min_qty
-                                data['use_config_min_sale_qty'] = '0'
-                            else:
-                                data['min_sale_qty'] = 1
-                                data['use_config_min_sale_qty'] = '1'
-                        if hasattr(template, 'max_sale_qty'):
-                            if template.max_sale_qty:
-                                data['max_sale_qty'] = template.max_sale_qty
-                                data['use_config_min_sale_qty'] = '0'
-                            else:
-                                data['max_sale_qty'] = 1
-                                data['use_config_min_sale_qty'] = '1'
-
-                        if app.debug:
-                            message = 'Magento %s. Product: %s. Data: %s' % (
-                                    shop.name, code, data)
-                            logging.getLogger('magento').info(message)
-                        try:
-                            inventory_api.update(product.code, data)
-                            message = '%s. Export stock %s - %s' % (
-                                shop.name, code, data.get('qty')
-                                )
-                            logging.getLogger('esale stock').info(message)
-                        except:
-                            message = '%s. Error export stock %s - %s' % (
-                                shop.name, code, data
-                                )
-                            logging.getLogger('esale stock').error(message)
-
-            Transaction().cursor.commit()
-            logging.getLogger('magento').info(
-                'Magento %s. End export stocks %s products.' % (
-                    shop.name, len(templates)))
+        logging.getLogger('magento').info(
+            'Magento %s. End export stocks %s products.' % (
+                self.name, len(products)))
