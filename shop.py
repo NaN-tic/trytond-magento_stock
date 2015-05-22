@@ -121,3 +121,33 @@ class SaleShop:
         logging.getLogger('magento').info(
             'Magento %s. End export stocks %s products.' % (
                 self.name, len(products)))
+
+    def export_stocks_kit_magento(self, prods=[]):
+        '''
+        Export Stocks Product Kit to Magento (All Product Kits)
+        :param prods: list
+        '''
+        pool = Pool()
+        Product = pool.get('product.product')
+
+        product_domain = Product.magento_product_domain([self.id])
+        product_domain.append(('kit', '=', True))
+
+        if prods:
+            products = Product.browse(prods)
+        else:
+            products = Product.search(product_domain)
+
+        if not products:
+            return
+
+        logging.getLogger('magento').info(
+            'Magento %s. Start export stocks kit %s products.' % (
+                self.name, len(products)))
+
+        self.sync_stock_magento(products)
+        Transaction().cursor.commit()
+
+        logging.getLogger('magento').info(
+            'Magento %s. End export stocks kit %s products.' % (
+                self.name, len(products)))
