@@ -33,7 +33,12 @@ class SaleShop:
 
         with Inventory(app.uri, app.username, app.password) as inventory_api:
             for product in products:
-                code = product.code
+                if not product.code:
+                    message = 'Magento. Error export product ID %s. ' \
+                            'Add a code' % (product.id)
+                    logging.getLogger('magento').error(message)
+                    continue
+                code = '%s ' % product.code # force a space - sku int/str
                 qty = quantities[product.id]
 
                 is_in_stock = '0'
@@ -69,7 +74,7 @@ class SaleShop:
                             self.name, code, data)
                     logging.getLogger('magento').info(message)
                 try:
-                    inventory_api.update(product.code, data)
+                    inventory_api.update(code, data)
                     message = '%s. Export stock %s - %s' % (
                         self.name, code, data.get('qty')
                         )
