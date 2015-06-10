@@ -108,6 +108,7 @@ class SaleShop:
 
             # Update date last import
             self.write([self], {'esale_last_stocks': now})
+            Transaction().cursor.commit()
 
         if not templates:
             logging.getLogger('magento').info(
