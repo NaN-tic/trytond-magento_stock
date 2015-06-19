@@ -25,6 +25,10 @@ class SaleShop:
         context = Transaction().context
         if not context.get('shop'): # reload context when run cron user
             user = self.get_shop_user()
+            if not user:
+                logging.getLogger('magento').info(
+                    'Magento %s. Add a user in shop configuration.' % (self.name))
+                return
             context = User._get_preferences(user, context_only=True)
         context['shop'] = self.id # force current shop
 
@@ -91,12 +95,17 @@ class SaleShop:
         """
         pool = Pool()
         Prod = pool.get('product.product')
+        User = pool.get('res.user')
 
         product_domain = Prod.magento_product_domain([self.id])
 
         context = Transaction().context
         if not context.get('shop'): # reload context when run cron user
             user = self.get_shop_user()
+            if not user:
+                logging.getLogger('magento').info(
+                    'Magento %s. Add a user in shop configuration.' % (self.name))
+                return
             context = User._get_preferences(user, context_only=True)
         context['shop'] = self.id # force current shop
 
