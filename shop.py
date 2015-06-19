@@ -90,32 +90,43 @@ class SaleShop:
         :param tpls: list of product.template ids
         """
         pool = Pool()
-        Template = pool.get('product.template')
+        Prod = pool.get('product.product')
 
-        if tpls:
-            templates = []
-            for t in Template.browse(tpls):
-                shops = [s.id for s in t.shops]
-                if t.esale_available and self.id in shops:
-                    templates.append(t)
-        else:
-            now = datetime.datetime.now()
-            last_stocks = self.esale_last_stocks
+        product_domain = Prod.magento_product_domain([self.id])
 
-            products = self.get_product_from_move_and_date(last_stocks)
-            tpls = [product.template for product in products]
-            templates = list(set(tpls))
+        context = Transaction().context
+        if not context.get('shop'): # reload context when run cron user
+            user = self.get_shop_user()
+            context = User._get_preferences(user, context_only=True)
+        context['shop'] = self.id # force current shop
 
-            # Update date last import
-            self.write([self], {'esale_last_stocks': now})
-            Transaction().cursor.commit()
+        with Transaction().set_context(context):
+            if tpls:
+                product_domain += [('template.id', 'in', tpls)]
+            else:
+                now = datetime.datetime.now()
+                last_stocks = self.esale_last_stocks
 
-        if not templates:
+                products = self.get_product_from_move_and_date(last_stocks)
+
+                product_domain += [['OR',
+                            ('create_date', '>=', last_stocks),
+                            ('write_date', '>=', last_stocks),
+                            ('template.create_date', '>=', last_stocks),
+                            ('template.write_date', '>=', last_stocks),
+                            ('id', 'in', [p.id for p in products]),
+                        ]]
+
+                # Update date last import
+                self.write([self], {'esale_last_stocks': now})
+                Transaction().cursor.commit()
+
+        products = Prod.search(product_domain)
+
+        if not products:
             logging.getLogger('magento').info(
                 'Magento. Not products to export stock.')
             return
-
-        products = [product for template in templates for product in template.products]
 
         logging.getLogger('magento').info(
             'Magento %s. Start export stock %s products.' % (
