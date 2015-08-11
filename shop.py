@@ -3,13 +3,14 @@
 # the full copyright notices and license terms.
 from trytond.pool import Pool, PoolMeta
 from trytond.transaction import Transaction
+from magento import *
 import datetime
 import logging
 
-from magento import *
-
 __all__ = ['SaleShop']
 __metaclass__ = PoolMeta
+
+logger = logging.getLogger(__name__)
 
 
 class SaleShop:
@@ -26,7 +27,7 @@ class SaleShop:
         if not context.get('shop'): # reload context when run cron user
             user = self.get_shop_user()
             if not user:
-                logging.getLogger('magento').info(
+                logger.info(
                     'Magento %s. Add a user in shop configuration.' % (self.name))
                 return
             context = User._get_preferences(user, context_only=True)
@@ -40,7 +41,7 @@ class SaleShop:
                 if not product.code:
                     message = 'Magento. Error export product ID %s. ' \
                             'Add a code' % (product.id)
-                    logging.getLogger('magento').error(message)
+                    logger.error(message)
                     continue
                 code = '%s ' % product.code # force a space - sku int/str
                 qty = quantities[product.id]
@@ -76,18 +77,18 @@ class SaleShop:
                 if app.debug:
                     message = 'Magento %s. Product: %s. Data: %s' % (
                             self.name, code, data)
-                    logging.getLogger('magento').info(message)
+                    logger.info(message)
                 try:
                     inventory_api.update(code, data)
                     message = '%s. Export stock %s - %s' % (
                         self.name, code, data.get('qty')
                         )
-                    logging.getLogger('magento').info(message)
+                    logger.info(message)
                 except:
                     message = '%s. Error export stock %s - %s' % (
                         self.name, code, data
                         )
-                    logging.getLogger('magento').error(message)
+                    logger.error(message)
 
     def export_stocks_magento(self, tpls=[]):
         """Export Stocks to Magento
@@ -103,7 +104,7 @@ class SaleShop:
         if not context.get('shop'): # reload context when run cron user
             user = self.get_shop_user()
             if not user:
-                logging.getLogger('magento').info(
+                logger.info(
                     'Magento %s. Add a user in shop configuration.' % (self.name))
                 return
             context = User._get_preferences(user, context_only=True)
@@ -133,18 +134,18 @@ class SaleShop:
         products = Prod.search(product_domain)
 
         if not products:
-            logging.getLogger('magento').info(
+            logger.info(
                 'Magento. Not products to export stock.')
             return
 
-        logging.getLogger('magento').info(
+        logger.info(
             'Magento %s. Start export stock %s products.' % (
                 self.name, len(products)))
 
         self.sync_stock_magento(products)
         Transaction().cursor.commit()
 
-        logging.getLogger('magento').info(
+        logger.info(
             'Magento %s. End export stocks %s products.' % (
                 self.name, len(products)))
 
@@ -167,13 +168,13 @@ class SaleShop:
         if not products:
             return
 
-        logging.getLogger('magento').info(
+        logger.info(
             'Magento %s. Start export stocks kit %s products.' % (
                 self.name, len(products)))
 
         self.sync_stock_magento(products)
         Transaction().cursor.commit()
 
-        logging.getLogger('magento').info(
+        logger.info(
             'Magento %s. End export stocks kit %s products.' % (
                 self.name, len(products)))
