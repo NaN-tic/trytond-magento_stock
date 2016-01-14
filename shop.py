@@ -83,11 +83,12 @@ class SaleShop:
                         self.name, code, data.get('qty')
                         )
                     logging.getLogger('magento').info(message)
-                except:
+                except Exception as e:
                     message = '%s. Error export stock %s - %s' % (
                         self.name, code, data
                         )
                     logging.getLogger('magento').error(message)
+                    logging.getLogger('magento').error(e)
 
     def export_stocks_magento(self, tpls=[]):
         """Export Stocks to Magento
