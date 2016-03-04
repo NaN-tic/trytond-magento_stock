@@ -3,6 +3,8 @@
 # the full copyright notices and license terms.
 from trytond.pool import Pool, PoolMeta
 from trytond.transaction import Transaction
+from trytond.tools import grouped_slice
+from trytond.config import config as config_
 from magento import *
 import datetime
 import logging
@@ -10,6 +12,7 @@ import logging
 __all__ = ['SaleShop']
 __metaclass__ = PoolMeta
 
+MAX_CONNECTIONS = config_.getint('magento', 'max_connections', default=50)
 logger = logging.getLogger(__name__)
 
 
@@ -36,57 +39,62 @@ class SaleShop:
         with Transaction().set_context(context):
             quantities = self.get_esale_product_quantity(products)
 
-        with Inventory(app.uri, app.username, app.password) as inventory_api:
-            for product in products:
-                if not product.code:
-                    message = 'Magento. Error export product ID %s. ' \
-                            'Add a code' % (product.id)
-                    logger.error(message)
-                    continue
-                code = '%s ' % product.code # force a space - sku int/str
-                qty = quantities[product.id]
+        inventories = []
+        for product in products:
+            if not product.code:
+                message = 'Magento. Error export product ID %s. ' \
+                        'Add a code' % (product.id)
+                logger.error(message)
+                continue
 
-                is_in_stock = '0'
-                if qty > 0:
-                    is_in_stock = '1'
+            code = '%s ' % product.code # force a space - sku int/str
+            qty = quantities[product.id]
 
-                manage_stock = '0'
-                if product.esale_manage_stock:
-                    manage_stock = '1'
+            is_in_stock = '0'
+            if qty > 0:
+                is_in_stock = '1'
 
-                data = { 
-                    'qty': qty,
-                    'is_in_stock': is_in_stock,
-                    'manage_stock': manage_stock
-                    }
-                if hasattr(product, 'sale_min_qty'):
-                    if product.sale_min_qty:
-                        data['min_sale_qty'] = product.sale_min_qty
-                        data['use_config_min_sale_qty'] = '0'
-                    else:
-                        data['min_sale_qty'] = 1
-                        data['use_config_min_sale_qty'] = '1'
-                if hasattr(product, 'max_sale_qty'):
-                    if product.max_sale_qty:
-                        data['max_sale_qty'] = product.max_sale_qty
-                        data['use_config_min_sale_qty'] = '0'
-                    else:
-                        data['max_sale_qty'] = 1
-                        data['use_config_min_sale_qty'] = '1'
+            manage_stock = '0'
+            if product.esale_manage_stock:
+                manage_stock = '1'
 
-                if app.debug:
-                    message = 'Magento %s. Product: %s. Data: %s' % (
-                            self.name, code, data)
-                    logger.info(message)
+            data = { 
+                'qty': qty,
+                'is_in_stock': is_in_stock,
+                'manage_stock': manage_stock
+                }
+            if hasattr(product, 'sale_min_qty'):
+                if product.sale_min_qty:
+                    data['min_sale_qty'] = product.sale_min_qty
+                    data['use_config_min_sale_qty'] = '0'
+                else:
+                    data['min_sale_qty'] = 1
+                    data['use_config_min_sale_qty'] = '1'
+            if hasattr(product, 'max_sale_qty'):
+                if product.max_sale_qty:
+                    data['max_sale_qty'] = product.max_sale_qty
+                    data['use_config_min_sale_qty'] = '0'
+                else:
+                    data['max_sale_qty'] = 1
+                    data['use_config_min_sale_qty'] = '1'
+            if app.debug:
+                message = 'Magento %s. Product: %s. Data: %s' % (
+                        self.name, code, data)
+                logger.info(message)
+            inventories.append([code, data]) # save in inventories list
+
+        for inventory_group in grouped_slice(inventories, MAX_CONNECTIONS):
+            inventory_data = [i for i in inventory_group]
+            with Inventory(app.uri, app.username, app.password) as inventory_api:
                 try:
-                    inventory_api.update(code, data)
-                    message = '%s. Export stock %s - %s' % (
-                        self.name, code, data.get('qty')
+                    inventory_api.update_multi(inventory_data)
+                    message = '%s. Export group stock %s' % (
+                        self.name, len(inventory_data)
                         )
                     logger.info(message)
                 except Exception as e:
-                    message = '%s. Error export stock %s - %s' % (
-                        self.name, code, data
+                    message = '%s. Error export group stock %s' % (
+                        self.name, len(inventory_data)
                         )
                     logger.error(message)
                     logger.error(e)
