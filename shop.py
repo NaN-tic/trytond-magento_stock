@@ -138,7 +138,7 @@ class SaleShop:
 
                 # Update date last import
                 self.write([self], {'esale_last_stocks': now})
-                Transaction().cursor.commit()
+                Transaction().commit()
 
         products = Prod.search(product_domain)
 
@@ -152,7 +152,7 @@ class SaleShop:
                 self.name, len(products)))
 
         self.sync_stock_magento(products)
-        Transaction().cursor.commit()
+        Transaction().commit()
 
         logger.info(
             'Magento %s. End export stocks %s products.' % (
@@ -182,7 +182,7 @@ class SaleShop:
                 self.name, len(products)))
 
         self.sync_stock_magento(products)
-        Transaction().cursor.commit()
+        Transaction().commit()
 
         logger.info(
             'Magento %s. End export stocks kit %s products.' % (
