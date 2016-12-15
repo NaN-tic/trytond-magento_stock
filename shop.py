@@ -12,13 +12,13 @@ import unicodecsv
 import logging
 
 __all__ = ['SaleShop']
-__metaclass__ = PoolMeta
 
 MAX_CONNECTIONS = config_.getint('magento', 'max_connections', default=50)
 logger = logging.getLogger(__name__)
 
 
 class SaleShop:
+    __metaclass__ = PoolMeta
     __name__ = 'sale.shop'
 
     def magento_inventory(self, products):
