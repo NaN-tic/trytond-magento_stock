@@ -1,12 +1,14 @@
 # This file is part magento_stock module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains
 # the full copyright notices and license terms.
+from io import BytesIO
 from trytond.pool import Pool, PoolMeta
 from trytond.transaction import Transaction
 from trytond.tools import grouped_slice
 from trytond.config import config as config_
 from magento import *
 import datetime
+import unicodecsv
 import logging
 
 __all__ = ['SaleShop']
@@ -19,14 +21,13 @@ class SaleShop:
     __metaclass__ = PoolMeta
     __name__ = 'sale.shop'
 
-    def sync_stock_magento(self, products):
-        '''Sync Stock Magento'''
-        pool = Pool()
-        User = pool.get('res.user')
+    def magento_inventory(self, products):
+        'Magento Inventory'
+        User = Pool().get('res.user')
 
         app = self.magento_website.magento_app
-
         context = Transaction().context
+
         if not context.get('shop'): # reload context when run cron user
             user = self.get_shop_user()
             if not user:
@@ -58,7 +59,7 @@ class SaleShop:
             if product.esale_manage_stock:
                 manage_stock = '1'
 
-            data = { 
+            data = {
                 'qty': qty,
                 'is_in_stock': is_in_stock,
                 'manage_stock': manage_stock
@@ -83,6 +84,13 @@ class SaleShop:
                 logger.info(message)
             inventories.append([code, data]) # save in inventories list
 
+        return inventories
+
+    def sync_stock_magento(self, products):
+        'Sync Stock Magento'
+        app = self.magento_website.magento_app
+        inventories = self.magento_inventory(products)
+
         for inventory_group in grouped_slice(inventories, MAX_CONNECTIONS):
             inventory_data = [i for i in inventory_group]
             with Inventory(app.uri, app.username, app.password) as inventory_api:
@@ -100,9 +108,7 @@ class SaleShop:
                     logger.error(e)
 
     def export_stocks_magento(self, tpls=[]):
-        """Export Stocks to Magento
-        :param tpls: list of product.template ids
-        """
+        'Export Stocks to Magento'
         pool = Pool()
         Prod = pool.get('product.product')
         User = pool.get('res.user')
@@ -159,12 +165,8 @@ class SaleShop:
                 self.name, len(products)))
 
     def export_stocks_kit_magento(self, prods=[]):
-        '''
-        Export Stocks Product Kit to Magento (All Product Kits)
-        :param prods: list
-        '''
-        pool = Pool()
-        Product = pool.get('product.product')
+        'Export Stocks Product Kit to Magento (All Product Kits)'
+        Product = Pool().get('product.product')
 
         product_domain = Product.magento_product_domain([self.id])
         product_domain.append(('kit', '=', True))
@@ -187,3 +189,23 @@ class SaleShop:
         logger.info(
             'Magento %s. End export stocks kit %s products.' % (
                 self.name, len(products)))
+
+    def esale_export_stock_csv_magento(self, products):
+        'eSale Export Stock CSV Magento'
+        inventories = self.magento_inventory(products)
+
+        values, keys = [], set()
+        for inventory in inventories:
+            # inventory is a tuple (code, vals)
+            vals = inventory[1]
+            vals['sku'] = inventory[0]
+            for k in vals.keys():
+                keys.add(k)
+            values.append(vals)
+
+        output = BytesIO()
+        wr = unicodecsv.DictWriter(output, sorted(list(keys)),
+            quoting=unicodecsv.QUOTE_ALL, encoding='utf-8')
+        wr.writeheader()
+        wr.writerows(values)
+        return output
