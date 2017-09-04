@@ -21,7 +21,7 @@ class SaleShop:
     __metaclass__ = PoolMeta
     __name__ = 'sale.shop'
 
-    def magento_inventory(self, products):
+    def magento_inventory(self, products, sync='api'):
         'Magento Inventory'
         User = Pool().get('res.user')
 
@@ -48,7 +48,8 @@ class SaleShop:
                 logger.error(message)
                 continue
 
-            code = '%s ' % product.code # force a space - sku int/str
+            # force a space when sync to Mgn Api - sku int/str
+            code = ('%s ' % product.code) if sync == 'api' else product.code
             qty = quantities[product.id]
 
             is_in_stock = '0'
@@ -89,7 +90,7 @@ class SaleShop:
     def sync_stock_magento(self, products):
         'Sync Stock Magento'
         app = self.magento_website.magento_app
-        inventories = self.magento_inventory(products)
+        inventories = self.magento_inventory(products, sync='api')
 
         for inventory_group in grouped_slice(inventories, MAX_CONNECTIONS):
             inventory_data = [i for i in inventory_group]
@@ -192,7 +193,7 @@ class SaleShop:
 
     def esale_export_stock_csv_magento(self, products):
         'eSale Export Stock CSV Magento'
-        inventories = self.magento_inventory(products)
+        inventories = self.magento_inventory(products, sync='csv')
 
         values, keys = [], set()
         for inventory in inventories:
