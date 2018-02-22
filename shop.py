@@ -57,13 +57,16 @@ class SaleShop:
                 is_in_stock = '1'
 
             manage_stock = '0'
+            use_config_manage_stock = '1'
             if product.esale_manage_stock:
                 manage_stock = '1'
+                use_config_manage_stock = '0'
 
             data = {
                 'qty': qty,
                 'is_in_stock': is_in_stock,
-                'manage_stock': manage_stock
+                'manage_stock': manage_stock,
+                'use_config_manage_stock': use_config_manage_stock,
                 }
             if hasattr(product, 'sale_min_qty'):
                 if product.sale_min_qty:
