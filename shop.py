@@ -3,6 +3,7 @@
 # the full copyright notices and license terms.
 from io import BytesIO
 from trytond.pool import Pool, PoolMeta
+from trytond.model import fields
 from trytond.transaction import Transaction
 from trytond.tools import grouped_slice
 from trytond.config import config as config_
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 class SaleShop:
     __metaclass__ = PoolMeta
     __name__ = 'sale.shop'
+    magento_use_config_manage_stock = fields.Boolean(
+        'Magento Use Config Manage Stock',
+        help=('If check this value, when export product stock add '
+            'use_config_manage_stock option'))
 
     def magento_inventory(self, products, sync='api'):
         'Magento Inventory'
@@ -57,17 +62,16 @@ class SaleShop:
                 is_in_stock = '1'
 
             manage_stock = '0'
-            use_config_manage_stock = '1'
             if product.esale_manage_stock:
                 manage_stock = '1'
-                use_config_manage_stock = '0'
 
-            data = {
-                'qty': qty,
-                'is_in_stock': is_in_stock,
-                'manage_stock': manage_stock,
-                'use_config_manage_stock': use_config_manage_stock,
-                }
+            data = {}
+            data['qty'] = qty
+            data['is_in_stock'] = is_in_stock
+            data['manage_stock'] = manage_stock
+            if self.magento_use_config_manage_stock:
+                data['use_config_manage_stock'] = ('1'
+                    if product.magento_use_config_manage_stock else '0')
             if hasattr(product, 'sale_min_qty'):
                 if product.sale_min_qty:
                     data['min_sale_qty'] = product.sale_min_qty
