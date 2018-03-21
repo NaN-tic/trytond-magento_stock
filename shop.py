@@ -75,10 +75,13 @@ class SaleShop:
             context = User._get_preferences(user, context_only=True)
         context['shop'] = self.id # force current shop
 
+        inventories = []
+        if not products:
+            return inventories
+
         with Transaction().set_context(context):
             quantities = self.get_esale_product_quantity(products)
 
-        inventories = []
         for product in products:
             if not product.code:
                 message = ('Magento. '
