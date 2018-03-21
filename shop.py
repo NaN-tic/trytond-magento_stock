@@ -26,6 +26,39 @@ class SaleShop:
         help=('If check this value, when export product stock add '
             'use_config_manage_stock option'))
 
+    def _get_magento_inventory(self, product, qty):
+        '''Get Magento Inventory data'''
+        is_in_stock = '0'
+        if qty > 0:
+            is_in_stock = '1'
+
+        manage_stock = '0'
+        if product.esale_manage_stock:
+            manage_stock = '1'
+
+        data = {}
+        data['qty'] = qty
+        data['is_in_stock'] = is_in_stock
+        data['manage_stock'] = manage_stock
+        if self.magento_use_config_manage_stock:
+            data['use_config_manage_stock'] = ('1'
+                if product.magento_use_config_manage_stock else '0')
+        if hasattr(product, 'sale_min_qty'):
+            if product.sale_min_qty:
+                data['min_sale_qty'] = product.sale_min_qty
+                data['use_config_min_sale_qty'] = '0'
+            else:
+                data['min_sale_qty'] = 1
+                data['use_config_min_sale_qty'] = '1'
+        if hasattr(product, 'max_sale_qty'):
+            if product.max_sale_qty:
+                data['max_sale_qty'] = product.max_sale_qty
+                data['use_config_min_sale_qty'] = '0'
+            else:
+                data['max_sale_qty'] = 1
+                data['use_config_min_sale_qty'] = '1'
+        return data
+
     def magento_inventory(self, products, sync='api'):
         'Magento Inventory'
         User = Pool().get('res.user')
@@ -48,44 +81,15 @@ class SaleShop:
         inventories = []
         for product in products:
             if not product.code:
-                message = 'Magento. Error export product ID %s. ' \
-                        'Add a code' % (product.id)
+                message = ('Magento. '
+                    'Not found code in product ID %s.' % (product.id))
                 logger.error(message)
                 continue
 
             # force a space when sync to Mgn Api - sku int/str
             code = ('%s ' % product.code) if sync == 'api' else product.code
             qty = quantities[product.id]
-
-            is_in_stock = '0'
-            if qty > 0:
-                is_in_stock = '1'
-
-            manage_stock = '0'
-            if product.esale_manage_stock:
-                manage_stock = '1'
-
-            data = {}
-            data['qty'] = qty
-            data['is_in_stock'] = is_in_stock
-            data['manage_stock'] = manage_stock
-            if self.magento_use_config_manage_stock:
-                data['use_config_manage_stock'] = ('1'
-                    if product.magento_use_config_manage_stock else '0')
-            if hasattr(product, 'sale_min_qty'):
-                if product.sale_min_qty:
-                    data['min_sale_qty'] = product.sale_min_qty
-                    data['use_config_min_sale_qty'] = '0'
-                else:
-                    data['min_sale_qty'] = 1
-                    data['use_config_min_sale_qty'] = '1'
-            if hasattr(product, 'max_sale_qty'):
-                if product.max_sale_qty:
-                    data['max_sale_qty'] = product.max_sale_qty
-                    data['use_config_min_sale_qty'] = '0'
-                else:
-                    data['max_sale_qty'] = 1
-                    data['use_config_min_sale_qty'] = '1'
+            data = self._get_magento_inventory(product, qty)
             if app.debug:
                 message = 'Magento %s. Product: %s. Data: %s' % (
                         self.name, code, data)
@@ -122,6 +126,7 @@ class SaleShop:
         User = pool.get('res.user')
 
         product_domain = Prod.magento_product_domain([self.id])
+        product_domain += [('esale_active', '=', True)]
 
         context = Transaction().context
         if not context.get('shop'): # reload context when run cron user
@@ -141,14 +146,16 @@ class SaleShop:
                 last_stocks = self.esale_last_stocks
 
                 products = self.get_product_from_move_and_date(last_stocks)
-
-                product_domain += [['OR',
-                            ('create_date', '>=', last_stocks),
-                            ('write_date', '>=', last_stocks),
-                            ('template.create_date', '>=', last_stocks),
-                            ('template.write_date', '>=', last_stocks),
-                            ('id', 'in', [p.id for p in products]),
-                        ]]
+                if self.esale_product_move_stocks:
+                    product_domain += [['OR',
+                                ('create_date', '>=', last_stocks),
+                                ('write_date', '>=', last_stocks),
+                                ('template.create_date', '>=', last_stocks),
+                                ('template.write_date', '>=', last_stocks),
+                                ('id', 'in', [p.id for p in products]),
+                            ]]
+                else:
+                    product_domain = [('id', 'in', [p.id for p in products])]
 
                 # Update date last import
                 self.write([self], {'esale_last_stocks': now})
