@@ -7,8 +7,7 @@ from trytond.model import fields
 __all__ = ['Template']
 
 
-class Template:
-    __metaclass__ = PoolMeta
+class Template(metaclass=PoolMeta):
     __name__ = 'product.template'
     magento_use_config_manage_stock = fields.Boolean(
         'Magento Use Config Manage Stock',

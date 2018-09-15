@@ -18,8 +18,7 @@ MAX_CONNECTIONS = config_.getint('magento', 'max_connections', default=50)
 logger = logging.getLogger(__name__)
 
 
-class SaleShop:
-    __metaclass__ = PoolMeta
+class SaleShop(metaclass=PoolMeta):
     __name__ = 'sale.shop'
     magento_use_config_manage_stock = fields.Boolean(
         'Magento Use Config Manage Stock',
